@@ -23,6 +23,8 @@ from discord.ext import commands
 
 from database import models
 from anki import scheduler, template, media as media_utils
+from anki.backup import save_local_backup
+from commands.autocomplete import deck_name_autocomplete
 
 
 @dataclass
@@ -132,9 +134,11 @@ class StudyCog(commands.Cog):
         if session is None:
             return
         if not session.queue:
+            save_local_backup(session.deck_id, session.deck_name, str(user.id))
             await channel.send(
                 f"🎉 {user.mention} That's today's queue for **{session.deck_name}** done "
                 f"(reviews due + today's new-card allotment). Reviewed {session.reviewed_count} card(s). "
+                f"Your progress was also auto-saved locally on the bot's device. "
                 f"Run `/study {session.deck_name}` again later today if more cards become due, "
                 f"or tomorrow for your next batch of new cards."
             )
@@ -187,6 +191,7 @@ class StudyCog(commands.Cog):
 
     @app_commands.command(name="study", description="Start a study session for a deck")
     @app_commands.describe(deck="The deck name you imported, e.g. 'kaishi'")
+    @app_commands.autocomplete(deck=deck_name_autocomplete)
     async def study(self, interaction: discord.Interaction, deck: str):
         deck_row = models.get_deck_by_name(deck)
         if deck_row is None:
