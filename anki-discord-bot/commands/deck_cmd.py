@@ -16,6 +16,8 @@ from discord import app_commands
 from discord.ext import commands
 
 from database import models
+from anki.backup import save_local_backup
+from commands.autocomplete import deck_name_autocomplete
 
 
 class ConfirmDeleteView(discord.ui.View):
@@ -59,6 +61,7 @@ deck_group = app_commands.Group(name="deck", description="Manage imported decks"
 
 @deck_group.command(name="settings", description="Set your daily new-card limit for a deck")
 @app_commands.describe(deck="The deck name", new_per_day="How many new cards to introduce per day (Anki default: 20)")
+@app_commands.autocomplete(deck=deck_name_autocomplete)
 async def deck_settings(interaction: discord.Interaction, deck: str, new_per_day: int):
     deck_row = models.get_deck_by_name(deck)
     if deck_row is None:
@@ -88,6 +91,7 @@ async def deck_list(interaction: discord.Interaction):
 
 @deck_group.command(name="export", description="Download a backup of your progress on a deck")
 @app_commands.describe(deck="The deck name to back up your progress for")
+@app_commands.autocomplete(deck=deck_name_autocomplete)
 async def deck_export(interaction: discord.Interaction, deck: str):
     deck_row = models.get_deck_by_name(deck)
     if deck_row is None:
@@ -95,11 +99,13 @@ async def deck_export(interaction: discord.Interaction, deck: str):
         return
 
     data = models.export_user_progress(deck_row["id"], str(interaction.user.id))
+    save_local_backup(deck_row["id"], deck, str(interaction.user.id))
     buf = io.BytesIO(json.dumps(data, indent=2).encode("utf-8"))
     file = discord.File(buf, filename=f"{deck}_progress_backup.json")
     await interaction.response.send_message(
         content=(
-            f"Here's your progress backup for **{deck}** ({len(data['cards'])} card(s) studied).\n"
+            f"Here's your progress backup for **{deck}** ({len(data['cards'])} card(s) studied). "
+            f"A copy was also saved locally on the bot's device.\n"
             f"Keep this file somewhere safe -- if you delete and re-import this deck later, "
             f"there's currently no automated way to restore it from this file, so treat it as "
             f"a personal record rather than a one-click restore."
@@ -111,6 +117,7 @@ async def deck_export(interaction: discord.Interaction, deck: str):
 
 @deck_group.command(name="delete", description="Permanently delete a deck and all progress on it")
 @app_commands.describe(deck="The deck name to delete")
+@app_commands.autocomplete(deck=deck_name_autocomplete)
 async def deck_delete(interaction: discord.Interaction, deck: str):
     deck_row = models.get_deck_by_name(deck)
     if deck_row is None:
